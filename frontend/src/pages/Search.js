@@ -53,7 +53,7 @@ export default function Search() {
     try {
       if (tab === "ai") {
         const { data } = await axios.post(
-          "https://403d-35-204-122-192.ngrok-free.app/query",
+          `${process.env.REACT_APP_API_URL}/query`,
           { query: finalQuery },
           { headers: { "Content-Type": "application/json" } },
         );
