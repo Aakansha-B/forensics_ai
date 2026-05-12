@@ -55,7 +55,7 @@ export default function Upload() {
       formData.append("file", file);
 
       const { data } = await axios.post(
-        "http://localhost:5000/api/cases",
+        "http://localhost:10000/api/cases",
         formData,
         { headers: { "Content-Type": "multipart/form-data" } },
       );
