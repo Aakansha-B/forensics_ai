@@ -2,8 +2,8 @@ fastapi
 uvicorn
 numpy
 faiss-cpu
-sentence-transformers
-torch==2.9.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu
 pymongo
 pydantic
 dnspython
+scikit-learn
+ 
