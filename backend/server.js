@@ -1,26 +1,28 @@
-const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const mongoose = require('mongoose');
+const express = require("express");
+const cors = require("cors");
+const dotenv = require("dotenv");
+const mongoose = require("mongoose");
 
 dotenv.config();
 
 const app = express();
 
 // ================== MIDDLEWARE ==================
-app.use(cors({
-  origin: 'http://localhost:3000',
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  }),
+);
 
 app.use(express.json());
 
 // ================== ROUTES ==================
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/analytics', require('./routes/analyticsRoutes'));
+app.use("/api/auth", require("./routes/authRoutes"));
+app.use("/api/analytics", require("./routes/analyticsRoutes"));
 
-const caseRoutes = require('./routes/caseRoutes');
-app.use('/api', caseRoutes);
+const caseRoutes = require("./routes/caseRoutes");
+app.use("/api", caseRoutes);
 
 // ================== MONGODB CONNECTION ==================
 const connectDB = async () => {
@@ -39,7 +41,7 @@ const connectDB = async () => {
 };
 
 // ================== START SERVER ==================
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 
 const startServer = async () => {
   await connectDB();
@@ -50,4 +52,3 @@ const startServer = async () => {
 };
 
 startServer();
-
