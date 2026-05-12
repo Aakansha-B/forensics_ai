@@ -1,32 +1,29 @@
+from sklearn.feature_extraction.text import TfidfVectorizer
 import re
 import os
 import numpy as np
-import faiss
-from sentence_transformers import SentenceTransformer
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 
+from sklearn.metrics.pairwise import cosine_similarity
+
 # ================== MONGODB ==================
 MONGO_URI  = os.environ.get("MONGO_URI")
-DB_NAME    = os.environ.get("DB_NAME", "test")       
-COLLECTION = os.environ.get("COLLECTION", "cases")   
+DB_NAME    = os.environ.get("DB_NAME", "test")
+COLLECTION = os.environ.get("COLLECTION", "cases")
+
 client     = MongoClient(MONGO_URI)
 db         = client[DB_NAME]
 collection = db[COLLECTION]
-
-# ================== MODEL ==================
-print("Loading embedding model...")
-model = SentenceTransformer("all-MiniLM-L6-v2")
-print("Model loaded.")
 
 # ================== FASTAPI ==================
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # replace * with your Vercel URL after deployment
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,7 +31,6 @@ app.add_middleware(
 
 # ================== HELPERS ==================
 def fetch_documents():
-    """Fetch all cases from MongoDB and flatten each data array into documents."""
     documents = []
     cases = list(collection.find({}))
     for case in cases:
@@ -49,14 +45,6 @@ def fetch_documents():
 
 def doc_to_text(doc):
     return f"{doc['case']['caseName']} {doc['case']['caseNumber']} {str(doc['data'])}"
-
-
-def build_index(documents):
-    texts      = [doc_to_text(d) for d in documents]
-    embeddings = np.array(model.encode(texts, show_progress_bar=False)).astype("float32")
-    index      = faiss.IndexFlatL2(embeddings.shape[1])
-    index.add(embeddings)
-    return index
 
 
 def format_result(doc):
@@ -104,26 +92,30 @@ def clean_query(query):
 def remove_stopwords(text):
     return " ".join([w for w in text.split() if w not in stop_words])
 
-def extract_entity(query):
-    phone = re.search(r"\+?\d{10,13}", query)
-    if phone:
-        return phone.group()
-    words = query.split()
-    return words[-1] if words else query
-
-def smart_query(query, documents, index):
+def smart_query(query, documents):
     cleaned = remove_stopwords(clean_query(query))
-    entity  = extract_entity(cleaned)
 
-    if re.search(r"\+?\d{10,13}", entity):
-        results = [d for d in documents if entity in str(d["data"])]
-    else:
-        q_vec    = model.encode([cleaned]).astype("float32")
-        D, I     = index.search(q_vec, 5)
-        results  = [documents[i] for i in I[0]]
-        filtered = [r for r in results if cleaned in str(r["data"]).lower()]
-        if filtered:
-            results = filtered
+    # direct phone match
+    phone = re.search(r"\+?\d{10,13}", cleaned)
+    if phone:
+        results = [d for d in documents if phone.group() in str(d["data"])]
+        if results:
+            return " ".join([format_result(r) for r in results[:5]])
+
+    # TF-IDF similarity search
+    texts = [doc_to_text(d) for d in documents]
+    texts_with_query = texts + [cleaned]
+
+    vectorizer = TfidfVectorizer(stop_words="english")
+    tfidf_matrix = vectorizer.fit_transform(texts_with_query)
+
+    query_vec = tfidf_matrix[-1]
+    doc_vecs  = tfidf_matrix[:-1]
+
+    scores  = cosine_similarity(query_vec, doc_vecs).flatten()
+    top_idx = scores.argsort()[-5:][::-1]
+
+    results = [documents[i] for i in top_idx if scores[i] > 0]
 
     if not results:
         return "No related data found."
@@ -149,8 +141,10 @@ def get_answer(req: QueryRequest):
         documents = fetch_documents()
         if not documents:
             return {"answer": "No data found in database."}
-        index  = build_index(documents)
-        answer = smart_query(req.query, documents, index)
+        answer = smart_query(req.query, documents)
         return {"answer": answer}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=10000)
